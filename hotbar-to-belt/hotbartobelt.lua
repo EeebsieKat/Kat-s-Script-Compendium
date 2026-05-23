@@ -31,7 +31,7 @@ local tickTimer = 0
 
 function events.tick()
     if not player:isLoaded() or beltPart == nil then return end
-    if not host then return end
+    if not host:isHost() then return end
 
     tickTimer = tickTimer + 1
     if tickTimer < 5 then return end
