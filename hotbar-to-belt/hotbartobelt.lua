@@ -2,22 +2,26 @@ local M = {}
 
 local beltTasks = {}
 local beltPart = nil
+local activeSlots = {}
 
-function M.init(belt)
+function M.init(belt, config)
     beltPart = belt
-    for i = 1, 9 do
-        beltTasks[i] = belt["belt_slot_" .. i]:newItem("belt_item_" .. i)
+    config = config or {}
+    activeSlots = config.slots or {0, 1, 2, 3, 4, 5, 6, 7, 8}
+
+    for i, slot in ipairs(activeSlots) do
+        local partName = "belt_slot_" .. slot
+        local taskName = "belt_item_" .. slot
+        beltTasks[slot] = belt[partName]:newItem(taskName)
             :setDisplayMode("FIXED")
             :setScale(0.1, 0.1, 0.1)
     end
 end
 
+-- Ping: receives hotbar data on all clients
 local function syncHotbar(slotData)
-    -- slotData is a table: { [slotIndex(1-9)] = "mod_id:item_id" }
-    for i = 1, 9 do
-        if beltTasks[i] then
-            beltTasks[i]:setItem(slotData[i] or "minecraft:air")
-        end
+    for slot, _ in pairs(beltTasks) do
+        beltTasks[slot]:setItem(slotData[slot] or "minecraft:air")
     end
 end
 
@@ -41,8 +45,12 @@ function events.tick()
     if inventory then
         for _, itemData in pairs(inventory) do
             local slot = itemData.Slot
-            if slot >= 0 and slot <= 8 then
-                slotData[slot + 1] = itemData.id
+            -- only sync slots you care about
+            for _, activeSlot in ipairs(activeSlots) do
+                if slot == activeSlot then
+                    slotData[slot] = itemData.id
+                    break
+                end
             end
         end
     end
