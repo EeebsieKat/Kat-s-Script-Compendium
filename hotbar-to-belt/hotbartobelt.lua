@@ -3,6 +3,7 @@ local M = {}
 local beltTasks = {}
 local beltPart = nil
 local activeSlots = {}
+local lastSlotData = {}  -- cache to detect changes
 
 function M.init(belt, config)
     beltPart = belt
@@ -15,23 +16,24 @@ function M.init(belt, config)
         beltTasks[slot] = belt[partName]:newItem(taskName)
             :setDisplayMode("FIXED")
             :setScale(0.1, 0.1, 0.1)
+        lastSlotData[slot] = ""  -- init cache as empty
     end
 end
 
--- Ping: receives hotbar data on all clients
-local function syncHotbar(slotData)
-    for slot, _ in pairs(beltTasks) do
-        beltTasks[slot]:setItem(slotData[slot] or "minecraft:air")
+-- Ping: receives a single slot update on all clients
+local function syncSlot(slot, itemId)
+    if beltTasks[slot] then
+        beltTasks[slot]:setItem(itemId or "minecraft:air")
     end
 end
 
-pings.syncBeltHotbar = syncHotbar
+pings.syncBeltSlot = syncSlot
 
 local tickTimer = 0
 
 function events.tick()
     if not player:isLoaded() or beltPart == nil then return end
-    if not host:isHost() then return end
+    if not host then return end
 
     tickTimer = tickTimer + 1
     if tickTimer < 5 then return end
@@ -39,23 +41,27 @@ function events.tick()
 
     local nbt = player:getNbt()
     local inventory = nbt and nbt.Inventory
+    if not inventory then return end
 
-    local slotData = {}
-
-    if inventory then
-        for _, itemData in pairs(inventory) do
-            local slot = itemData.Slot
-            -- only sync slots you care about
-            for _, activeSlot in ipairs(activeSlots) do
-                if slot == activeSlot then
-                    slotData[slot] = itemData.id
-                    break
-                end
-            end
+    -- Build current state
+    local currentSlotData = {}
+    for _, activeSlot in ipairs(activeSlots) do
+        currentSlotData[activeSlot] = "minecraft:air"  -- default
+    end
+    for _, itemData in pairs(inventory) do
+        local slot = itemData.Slot
+        if currentSlotData[slot] ~= nil then
+            currentSlotData[slot] = itemData.id
         end
     end
 
-    pings.syncBeltHotbar(slotData)
+    -- Only ping slots that actually changed
+    for slot, itemId in pairs(currentSlotData) do
+        if lastSlotData[slot] ~= itemId then
+            lastSlotData[slot] = itemId
+            pings.syncBeltSlot(slot, itemId)
+        end
+    end
 end
 
 return M
