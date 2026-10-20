@@ -194,7 +194,7 @@ local function buildStack(item, id)
     return result
 end
 
--- SELECTED HOTBAR SLOT
+-- SELECTED HOTBAR SLOT (read once per tick, shared by all belts)
 
 local cachedTime = -1
 local cachedSelected = nil
@@ -230,7 +230,7 @@ function Belt:addChannel(part, cfg, defaults, sources)
     self.channels[index] = {
         task    = task,
         sources = sources,
-        source  = nil,      -- slot currently feeding this channel (per host)
+        source  = nil,
         filled  = false,
         rules   = {
             whitelist = asList(cfg.whitelist) or defaults.rules.whitelist,
@@ -317,6 +317,7 @@ end
 
 -- HOST SIDE
 
+-- returns stackString, sourceSlot
 function Belt:resolve(ch)
     for _, slot in ipairs(ch.sources) do
         local item = host:getSlot(slot)
@@ -337,7 +338,7 @@ end
 
 function Belt:tick()
 
-    -- SELECTED SLOT (checked every tick, it's cheap)
+    -- SELECTED SLOT
 
     if self.hideWhenHeld then
         local selected = getSelectedSlot()
@@ -438,8 +439,7 @@ function M.new(belt, config)
             filter    = config.filter,
         },
     }
---
-    -- SLOT CHANNELS: one display per inventory slot--
+    -- SLOT CHANNELS: one display per inventory slot
 
     local slotConfig = config.slotConfig or {}
     local slots = config.slots
@@ -460,8 +460,7 @@ function M.new(belt, config)
             self:addChannel(part, sc, defaults, { slot })
         end
     end
---
-    -- ITEM CHANNELS: show a specific item if it's ANYWHERE
+    -- ITEM CHANNELS: show a specific item if it's ANYWHERE in the searched slots
 
     for i, cc in ipairs(config.channels or {}) do
         if cc.part == nil then
@@ -484,8 +483,8 @@ function M.new(belt, config)
     if self.carrier then
         self.carrier:setVisible(false)
     end
---
-    -- ONLY THE HOST RUNS THE TICK--
+
+    -- ONLY THE HOST RUNS THE TICK
 
     if host:isHost() then
         local function onTick()
